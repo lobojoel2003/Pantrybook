@@ -1,0 +1,3 @@
+# Pantrybook holds private information about the families you serve.
+User-agent: *
+Disallow: /
