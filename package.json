@@ -1,0 +1,78 @@
+{
+	"name": "pantrybook",
+	"version": "1.0.0",
+	"description": "Free, self-hostable, offline-capable intake and distribution app for food pantries, baby-supply closets and clothing banks.",
+	"private": true,
+	"type": "module",
+	"license": "AGPL-3.0-only",
+	"author": "lobojoel2003",
+	"homepage": "https://github.com/lobojoel2003/Pantrybook#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/lobojoel2003/Pantrybook.git"
+	},
+	"bugs": {
+		"url": "https://github.com/lobojoel2003/Pantrybook/issues"
+	},
+	"keywords": [
+		"food-pantry",
+		"food-bank",
+		"nonprofit",
+		"intake",
+		"pwa",
+		"offline-first",
+		"self-hosted",
+		"sveltekit",
+		"sqlite"
+	],
+	"engines": {
+		"node": ">=22.18"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"start": "node build",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc -p src/service-worker --noEmit",
+		"lint": "prettier --check . && eslint .",
+		"format": "prettier --write .",
+		"test": "vitest run",
+		"test:unit": "vitest",
+		"test:e2e": "npm run build && playwright test",
+		"seed:demo": "node scripts/cli.ts seed-demo",
+		"cli": "node scripts/cli.ts",
+		"icons": "node scripts/generate-icons.ts",
+		"version": "node scripts/sync-version.ts && git add CHANGELOG.md"
+	},
+	"dependencies": {
+		"better-sqlite3": "^13.0.3"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@playwright/test": "1.63.0",
+		"@sveltejs/adapter-node": "^6.0.1",
+		"@sveltejs/kit": "^3.1.1",
+		"@sveltejs/vite-plugin-svelte": "^7.3.1",
+		"@types/better-sqlite3": "^9.6.0",
+		"@types/node": "^22.19.0",
+		"eslint": "^10.14.0",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-svelte": "^3.24.0",
+		"globals": "^17.14.0",
+		"idb": "^8.0.4",
+		"prettier": "^3.9.10",
+		"prettier-plugin-svelte": "^4.1.1",
+		"svelte": "^5.57.3",
+		"svelte-check": "^4.7.8",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.72.1",
+		"vite": "^8.3.5",
+		"vitest": "^5.1.0",
+		"zod": "^4.6.7"
+	},
+	"imports": {
+		"#lib": "./src/lib/index.ts",
+		"#lib/*": "./src/lib/*"
+	}
+}
