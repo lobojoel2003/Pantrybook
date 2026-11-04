@@ -1,12 +1,16 @@
 name: Release
 
-# Push a tag like v1.2.3 (for example with `npm version minor && git push --follow-tags`).
-# The workflow tests the tag, publishes a multi-arch image to GHCR, builds a downloadable
+# Two ways to release:
+#   1. Push a tag like v1.2.3 (for example `npm version minor && git push --follow-tags`).
+#   2. Actions → Release → Run workflow: tags the selected branch's head with the version
+#      in package.json, then releases it.
+# The workflow tests the code, publishes a multi-arch image to GHCR, builds a downloadable
 # bundle with checksums and provenance, and creates the GitHub Release from CHANGELOG.md.
 
 on:
   push:
     tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,17 +23,25 @@ jobs:
   verify:
     name: Verify version
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # to create the tag when started from the Actions tab
     outputs:
       version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      sha: ${{ steps.version.outputs.sha }}
       prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6
       - id: version
         name: Tag matches package.json and CHANGELOG.md
         run: |
-          tag="${GITHUB_REF_NAME}"
-          version="${tag#v}"
           pkg="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            tag="v$pkg"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          version="${tag#v}"
           if [ "$version" != "$pkg" ]; then
             echo "::error::Tag $tag does not match package.json version $pkg"
             exit 1
@@ -39,7 +51,28 @@ jobs:
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           if [[ "$version" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Create the tag (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          existing="$(git ls-remote --tags origin "refs/tags/${TAG}^{}" "refs/tags/${TAG}" | sort | head -n1 | cut -f1)"
+          if [ -n "$existing" ]; then
+            if git ls-remote --tags origin "refs/tags/${TAG}^{}" "refs/tags/${TAG}" | cut -f1 | grep -qx "$GITHUB_SHA"; then
+              echo "$TAG already points at $GITHUB_SHA."
+              exit 0
+            fi
+            echo "::error::$TAG already exists on a different commit. Bump the version first (npm version patch)."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Pantrybook $VERSION" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
 
   ci:
     name: Test
@@ -69,6 +102,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ needs.verify.outputs.sha }}
           fetch-depth: 0
       - id: vars
         run: |
@@ -87,9 +121,9 @@ jobs:
         with:
           images: ${{ steps.vars.outputs.image }}
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=semver,pattern={{version}},value=${{ needs.verify.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.verify.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ needs.verify.outputs.tag }},enable=${{ !startsWith(needs.verify.outputs.version, '0.') }}
             type=sha,prefix=sha-
           flavor: |
             latest=${{ needs.verify.outputs.prerelease == 'false' }}
@@ -129,9 +163,11 @@ jobs:
       attestations: write
     env:
       VERSION: ${{ needs.verify.outputs.version }}
+      TAG: ${{ needs.verify.outputs.tag }}
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ needs.verify.outputs.sha }}
           fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
@@ -181,7 +217,7 @@ jobs:
         run: |
           flags=()
           if [ "${{ needs.verify.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" \
+          gh release create "$TAG" \
             "dist/pantrybook-${VERSION}.tar.gz" \
             "dist/pantrybook-${VERSION}.zip" \
             dist/SHA256SUMS \

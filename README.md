@@ -301,6 +301,8 @@ npm version minor      # or patch / major: updates package.json + CHANGELOG, com
 git push --follow-tags
 ```
 
+Or, without a local tag: bump the version and changelog on `main`, then open **Actions → Release → Run workflow**; it tags the head of `main` with the version from `package.json`.
+
 The [release workflow](.github/workflows/release.yml) then runs every check, publishes multi-arch images to GHCR (`X.Y.Z`, `X.Y`, `X`, `latest`) with an SBOM and signed provenance, builds `.tar.gz` and `.zip` bundles with `SHA256SUMS`, and creates the GitHub Release from the changelog. Pushes to `main` publish an `edge` image.
 
 ### Continuous integration

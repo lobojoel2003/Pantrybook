@@ -51,5 +51,6 @@ prefix: `feat: print a weekly sign-in sheet`, `fix: count seniors in ZIP report`
 
 ## Releases
 
-Maintainers release with `npm version <patch|minor|major>` and `git push --follow-tags`. See
+Maintainers release with `npm version <patch|minor|major>` and `git push --follow-tags`, or by
+running the **Release** workflow from the Actions tab after bumping the version on `main`. See
 [Versioning and releases](README.md#versioning-and-releases) in the README.
