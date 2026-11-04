@@ -1,0 +1,23 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# "Deploy to Render" in the README uses this file. It creates one web service with
+# a 1 GB persistent disk for the database (Render's Starter plan; disks need a paid plan).
+services:
+  - type: web
+    name: pantrybook
+    runtime: image
+    image:
+      url: ghcr.io/lobojoel2003/pantrybook:latest
+    plan: starter
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: PANTRYBOOK_DATA_DIR
+        value: /data
+      - key: PROTOCOL_HEADER
+        value: x-forwarded-proto
+      - key: TZ
+        value: America/New_York
+    disk:
+      name: pantrybook-data
+      mountPath: /data
+      sizeGB: 1

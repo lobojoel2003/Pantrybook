@@ -1,0 +1,8 @@
+# Caddy reverse proxy with automatic HTTPS for Pantrybook.
+# Set DOMAIN to a name that points at this server, e.g. pantry.example.org.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy pantrybook:3000 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

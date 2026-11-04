@@ -1,0 +1,18 @@
+# A public demo with fictional data on Render's free plan (no disk needed: the demo
+# re-seeds itself on every start and every 24 hours). In Render, create a Blueprint
+# and point it at this file path.
+services:
+  - type: web
+    name: pantrybook-demo
+    runtime: image
+    image:
+      url: ghcr.io/lobojoel2003/pantrybook:latest
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: PANTRYBOOK_DEMO
+        value: 'true'
+      - key: PANTRYBOOK_DEMO_RESET_HOURS
+        value: '24'
+      - key: PROTOCOL_HEADER
+        value: x-forwarded-proto

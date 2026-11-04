@@ -1,0 +1,43 @@
+# Run Pantrybook with Docker Compose:
+#   docker compose up -d                     # http://localhost:3000
+#   DOMAIN=pantry.example.org docker compose --profile https up -d
+#
+# The `https` profile adds Caddy, which gets a free HTTPS certificate automatically.
+# HTTPS is needed for offline mode and for installing Pantrybook on tablets and phones.
+
+services:
+  pantrybook:
+    image: ghcr.io/lobojoel2003/pantrybook:latest
+    # To build from source instead, comment out `image` and uncomment `build`.
+    # build: .
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      # Your pantry's time zone (used for demo data and server logs).
+      TZ: America/New_York
+      # Uncomment to fill Pantrybook with fictional data for training:
+      # PANTRYBOOK_DEMO: 'true'
+    volumes:
+      - pantrybook-data:/data
+
+  caddy:
+    image: caddy:2
+    profiles: ['https']
+    restart: unless-stopped
+    depends_on:
+      - pantrybook
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  pantrybook-data:
+  caddy-data:
+  caddy-config:
