@@ -1,0 +1,185 @@
+name: Release
+
+# Push a tag like v1.2.3 (for example with `npm version minor && git push --follow-tags`).
+# The workflow tests the tag, publishes a multi-arch image to GHCR, builds a downloadable
+# bundle with checksums and provenance, and creates the GitHub Release from CHANGELOG.md.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: version
+        name: Tag matches package.json and CHANGELOG.md
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$version" != "$pkg" ]; then
+            echo "::error::Tag $tag does not match package.json version $pkg"
+            exit 1
+          fi
+          if ! grep -q "^## \[$version\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+  ci:
+    name: Test
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+    with:
+      release: true
+
+  docker:
+    name: Publish Docker image
+    needs: [verify, ci]
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      image: ${{ steps.vars.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: vars
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/pantrybook" >> "$GITHUB_OUTPUT"
+          echo "build_number=$(git rev-list --count HEAD)" >> "$GITHUB_OUTPUT"
+          echo "epoch=$(git log -1 --format=%ct)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.vars.outputs.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}},enable=${{ !startsWith(github.ref, 'refs/tags/v0.') }}
+            type=sha,prefix=sha-
+          flavor: |
+            latest=${{ needs.verify.outputs.prerelease == 'false' }}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          sbom: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ needs.verify.outputs.version }}
+            BUILD_NUMBER=${{ steps.vars.outputs.build_number }}
+            GIT_SHA=${{ github.sha }}
+            SOURCE_DATE_EPOCH=${{ steps.vars.outputs.epoch }}
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Attest image provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ steps.vars.outputs.image }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  github-release:
+    name: Create GitHub Release
+    needs: [verify, ci, docker]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Build
+        run: |
+          export BUILD_NUMBER="$(git rev-list --count HEAD)"
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          export RELEASE_CHANNEL=release
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          npm run build
+      - name: Package release bundle
+        run: |
+          name="pantrybook-${VERSION}"
+          dir="dist/${name}"
+          mkdir -p "$dir/scripts" "$dir/src/lib"
+          cp -R build deploy "$dir/"
+          cp package.json package-lock.json .npmrc .env.example docker-compose.yml Dockerfile LICENSE README.md CHANGELOG.md "$dir/"
+          cp scripts/cli.ts "$dir/scripts/"
+          cp -R src/lib/server src/lib/shared "$dir/src/lib/"
+          find "$dir/src" -name '*.test.ts' -delete
+          rm -f "$dir/src/lib/server/test-helpers.ts"
+          printf '{"version":"%s","buildNumber":"%s","commit":"%s"}\n' "$VERSION" "$BUILD_NUMBER" "$GITHUB_SHA" > "$dir/BUILD_INFO.json"
+          tar -C dist -czf "dist/${name}.tar.gz" "$name"
+          (cd dist && zip -qr "${name}.zip" "$name")
+          (cd dist && sha256sum "${name}.tar.gz" "${name}.zip" > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - name: Attest bundle provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            dist/pantrybook-${{ env.VERSION }}.tar.gz
+            dist/pantrybook-${{ env.VERSION }}.zip
+      - name: Write release notes
+        run: |
+          node scripts/release-notes.ts "$VERSION" \
+            --image "${{ needs.docker.outputs.image }}" \
+            --digest "${{ needs.docker.outputs.digest }}" \
+            --build "$BUILD_NUMBER" > dist/RELEASE_NOTES.md
+          cat dist/RELEASE_NOTES.md
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          flags=()
+          if [ "${{ needs.verify.outputs.prerelease }}" = "true" ]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/pantrybook-${VERSION}.tar.gz" \
+            "dist/pantrybook-${VERSION}.zip" \
+            dist/SHA256SUMS \
+            --title "Pantrybook ${VERSION}" \
+            --notes-file dist/RELEASE_NOTES.md \
+            --verify-tag "${flags[@]}"

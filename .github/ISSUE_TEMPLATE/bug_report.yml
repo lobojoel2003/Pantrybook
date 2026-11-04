@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in Pantrybook doesn't work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Please don't include real names, phone numbers or addresses of the families you serve.**
+        For security problems, use a [private security advisory](https://github.com/lobojoel2003/Pantrybook/security/advisories/new) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to Check in
+        2. Search for …
+        3. …
+  - type: input
+    id: version
+    attributes:
+      label: Pantrybook version
+      description: Shown under Account (for example "1.0.0 (build 42 · a1b2c3d)").
+    validations:
+      required: true
+  - type: dropdown
+    id: hosting
+    attributes:
+      label: How do you run Pantrybook?
+      options:
+        - Docker / Docker Compose
+        - Render
+        - Fly.io
+        - Node.js without Docker
+        - Other
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: iPad, Safari 18 / Windows laptop, Chrome / Android phone, Chrome
+  - type: dropdown
+    id: offline
+    attributes:
+      label: Were you offline when it happened?
+      options:
+        - 'No'
+        - 'Yes'
+        - Not sure

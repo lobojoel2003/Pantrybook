@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/lobojoel2003/Pantrybook/security/advisories/new
+    about: Please report security problems privately.
+  - name: Questions and ideas
+    url: https://github.com/lobojoel2003/Pantrybook/discussions
+    about: Ask questions and share how you use Pantrybook.

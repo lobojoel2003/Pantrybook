@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an idea that would help your pantry.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Tell us about your pantry and what's hard today. For example "Our food bank asks for a monthly TEFAP form and we fill it in by hand."
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you handle it now?
