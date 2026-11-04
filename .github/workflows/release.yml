@@ -44,6 +44,11 @@ jobs:
   ci:
     name: Test
     needs: verify
+    # A called workflow may only use permissions the caller grants (its edge-image job
+    # is skipped for releases, but still declares packages: write).
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/ci.yml
     with:
       release: true
