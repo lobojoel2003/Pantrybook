@@ -46,7 +46,7 @@
 		"version": "node scripts/sync-version.ts && git add CHANGELOG.md"
 	},
 	"dependencies": {
-		"better-sqlite3": "^13.0.3"
+		"better-sqlite3": "^13.2.0"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
